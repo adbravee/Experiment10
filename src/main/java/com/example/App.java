@@ -1,64 +1,58 @@
 import java.sql.*;
 import java.util.Scanner;
-import java.io.*;
 
-public class App{
-
-    // Hardcoded credentials (Security Hotspot)
-    private static final String DB_PASSWORD = "admin123";
+public class App {
 
     public static void main(String[] args) {
-        Scanner scanner = new Scanner(System.in);
 
-        System.out.println("Enter username:");
-        System.out.println("Enter username:");
-        System.out.println("Enter username:");
+        // Use try-with-resources (fixes resource leaks)
+        try (Scanner scanner = new Scanner(System.in)) {
 
-        String userInput = scanner.nextLine();
+            System.out.print("Enter username: ");
+            String userInput = scanner.nextLine();
 
-        // SQL Injection vulnerability
-        String query = "SELECT * FROM users WHERE username = '" + userInput + "'";
+            // Read DB password from environment variable (secure)
+            String dbPassword = System.getenv("DB_PASSWORD");
 
-        try {
-            Connection conn = DriverManager.getConnection(
-                    "jdbc:mysql://localhost:3306/testdb", "root", DB_PASSWORD);
-
-            Statement stmt = conn.createStatement();
-            ResultSet rs = stmt.executeQuery(query);
-
-            while (rs.next()) {
-                System.out.println("User found: " + rs.getString("username"));
+            if (dbPassword == null) {
+                System.err.println("Database password not set in environment variables.");
+                return;
             }
 
-        } catch (Exception e) {
-            // Sensitive info exposure
-            e.printStackTrace();
-        }
+            String url = "jdbc:mysql://localhost:3306/testdb";
+            String dbUser = "root";
 
- try {
-            Connection conn = DriverManager.getConnection(
-                    "jdbc:mysql://localhost:3306/testdb", "root", DB_PASSWORD);
+            // Secure DB connection + PreparedStatement (prevents SQL Injection)
+            try (Connection conn = DriverManager.getConnection(url, dbUser, dbPassword);
+                 PreparedStatement pstmt = conn.prepareStatement(
+                         "SELECT * FROM users WHERE username = ?")) {
 
-            Statement stmt = conn.createStatement();
-            ResultSet rs = stmt.executeQuery(query);
+                pstmt.setString(1, userInput);
+                ResultSet rs = pstmt.executeQuery();
 
-            while (rs.next()) {
-                System.out.println("User found: " + rs.getString("username"));
+                boolean found = false;
+                while (rs.next()) {
+                    System.out.println("User found: " + rs.getString("username"));
+                    found = true;
+                }
+
+                if (!found) {
+                    System.out.println("No user found.");
+                }
+
+            } catch (SQLException e) {
+                // Proper logging (avoid exposing sensitive data)
+                System.err.println("Database error occurred.");
             }
 
-        } catch (Exception e) {
-            // Sensitive info exposure
-            e.printStackTrace();
+            // Safe command execution (avoid injection)
+            if (userInput.matches("^[a-zA-Z0-9._-]+$")) {
+                ProcessBuilder pb = new ProcessBuilder("cmd.exe", "/c", "dir", userInput);
+                pb.start();
+            } else {
+                System.out.println("Invalid input for command execution.");
+            }
+
         }
-
-
-        // Command Injection vulnerability
-        try {
-            Runtime.getRuntime().exec("cmd.exe /c dir " + userInput);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        // Resource leak (scanner not closed)
     }
 }
